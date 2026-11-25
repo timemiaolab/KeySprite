@@ -14,13 +14,16 @@
     "windows": [
       {
         "label": "preferences",
-        "title": "KeySprite \u8bbe\u7f6e",
+        "title": "KeySprite 设置",
         "width": 560,
         "height": 640,
         "resizable": false,
         "visible": false,
         "center": true,
-        "skipTaskbar": true
+        "skipTaskbar": true,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {
