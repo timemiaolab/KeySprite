@@ -9,7 +9,6 @@ use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoUninitialize, IServiceProvider, CLSCTX_LOCAL_SERVER,
     COINIT_APARTMENTTHREADED,
 };
-use windows::Win32::System::Variant::VT_I4;
 use windows::Win32::UI::Shell::{
     IFolderView, IShellBrowser, IShellItemArray, IShellWindows, IWebBrowserApp,
     SID_STopLevelBrowser, ShellWindows, SHGetKnownFolderPath, FOLDERID_Desktop, KF_FLAG_DEFAULT,
@@ -104,10 +103,9 @@ unsafe fn query_explorer_window(target_hwnd: HWND) -> Result<FileManagerContext,
         .map_err(|e| PlatformError::SystemCall(e.to_string()))?;
 
     for idx in 0..count {
-        let mut var = VARIANT::default();
-        // 使用 VT_I4 索引遍历 IShellWindows
-        (*var.Anonymous.Anonymous).vt = VT_I4;
-        (*var.Anonymous.Anonymous).Anonymous.lVal = idx;
+        // windows 0.58: windows::core::VARIANT has private fields.
+        // From<i32> builds a VT_I4 variant (lVal = idx), matching the previous manual layout.
+        let var = VARIANT::from(idx);
 
         let Ok(disp) = shell_windows.Item(&var) else {
             continue;
@@ -137,7 +135,7 @@ unsafe fn query_explorer_window(target_hwnd: HWND) -> Result<FileManagerContext,
             .map_err(|e| PlatformError::SystemCall(e.to_string()))?;
 
         let mut selected_items = Vec::new();
-        if let Ok(items) = folder_view.Items::<IShellItemArray>(SVGIO_SELECTION.0 as u32) {
+        if let Ok(items) = folder_view.Items::<IShellItemArray>(SVGIO_SELECTION) {
             if let Ok(item_count) = items.GetCount() {
                 for i in 0..item_count {
                     if let Ok(shell_item) = items.GetItemAt(i) {
@@ -174,7 +172,7 @@ unsafe fn query_explorer_window(target_hwnd: HWND) -> Result<FileManagerContext,
 
 fn get_desktop_path() -> Option<PathBuf> {
     unsafe {
-        SHGetKnownFolderPath(&FOLDERID_Desktop, KF_FLAG_DEFAULT.0 as u32, None)
+        SHGetKnownFolderPath(&FOLDERID_Desktop, KF_FLAG_DEFAULT, None)
             .ok()
             .and_then(|pwstr| pwstr.to_string().ok())
             .map(PathBuf::from)

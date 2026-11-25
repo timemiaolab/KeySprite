@@ -65,6 +65,12 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # rust-toolchain.toml may activate a toolchain name (e.g. 1.90) distinct from
+      # the 1.90.0 install that dtolnay/rust-toolchain just configured. Always add
+      # the job target on the currently active toolchain before building.
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }}
+
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
         with:
