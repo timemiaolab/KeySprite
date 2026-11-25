@@ -15,12 +15,13 @@ interface ShortcutRecorderProps {
   conflictWith?: string;
   targetOS: TargetOS;
   pressKeysPrompt?: string;
-  clickToRecord?: string;
-  escLabel?: string;
+  cancelRecordingHint?: string;
+  recordShortcutAria?: string;
   resetSingleTooltip?: string;
   needModifierError?: string;
   conflictError?: string;
-  onChange: (nextShortcut: string) => void;
+  externalError?: string | null;
+  onChange: (nextShortcut: string) => void | Promise<void>;
 }
 
 export function ShortcutRecorder({
@@ -31,12 +32,13 @@ export function ShortcutRecorder({
   defaultValue,
   conflictWith,
   targetOS,
-  pressKeysPrompt = '请按下新组合键…',
-  clickToRecord = '点击修改',
-  escLabel = 'Esc',
-  resetSingleTooltip = '恢复默认快捷键',
-  needModifierError = '至少需要包含一个修饰键（Cmd / Ctrl / Alt / Shift）',
-  conflictError = '该快捷键已被另一项功能占用，请更换组合键',
+  pressKeysPrompt = 'Press the new shortcut',
+  cancelRecordingHint = 'Esc',
+  recordShortcutAria,
+  resetSingleTooltip = 'Reset to default shortcut',
+  needModifierError = 'Include at least one modifier key (Cmd / Ctrl / Alt / Shift)',
+  conflictError = 'This shortcut is already assigned to the other action',
+  externalError = null,
   onChange,
 }: ShortcutRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
@@ -72,7 +74,9 @@ export function ShortcutRecorder({
 
       setErrorMsg(null);
       setIsRecording(false);
-      onChange(shortcut);
+      void Promise.resolve(onChange(shortcut)).catch(() => {
+        // Parent reports registration failures via externalError and keeps the previous value.
+      });
     };
 
     const handleBlur = () => {
@@ -89,52 +93,52 @@ export function ShortcutRecorder({
 
   const tokens = formatShortcutTokens(value, targetOS);
   const isModified = value !== defaultValue;
+  const visibleError = errorMsg ?? externalError;
 
   return (
-    <div className="py-4 first:pt-2">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="min-w-0">
-          <label htmlFor={id} className="block text-sm font-semibold text-[#0F172A]">
+    <div className="py-2.5 first:pt-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <label htmlFor={id} className="block text-sm font-semibold text-[#0F172A] leading-snug break-words">
             {label}
           </label>
-          <p className="mt-0.5 text-xs text-slate-500 leading-relaxed">{description}</p>
+          <p className="mt-0.5 text-xs text-slate-500 leading-relaxed break-words">{description}</p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             ref={buttonRef}
             id={id}
             type="button"
+            aria-label={recordShortcutAria ? `${recordShortcutAria}: ${label}` : label}
+            aria-pressed={isRecording}
             onClick={() => {
               setErrorMsg(null);
               setIsRecording((prev) => !prev);
             }}
-            className={`min-w-[184px] h-10 px-3 rounded-lg border text-xs font-medium flex items-center justify-between gap-3 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00845A] ${
+            className={`min-w-[7.5rem] max-w-[13rem] min-h-8 px-2.5 py-1 rounded-md border text-xs font-medium flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00845A] ${
               isRecording
                 ? 'border-[#00845A] bg-[#00845A]/5 text-[#00845A]'
-                : 'border-slate-200 bg-slate-50 hover:border-slate-300 text-slate-700'
+                : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700'
             }`}
           >
             {isRecording ? (
-              <span className="flex items-center gap-2 font-medium">
+              <span className="flex items-center gap-1.5 text-left whitespace-normal leading-snug">
                 <Keyboard className="w-3.5 h-3.5 shrink-0" />
                 <span>{pressKeysPrompt}</span>
               </span>
             ) : (
-              <span className="flex items-center gap-1">
+              <span className="flex flex-wrap items-center justify-center gap-1">
                 {tokens.map((token, idx) => (
                   <kbd
                     key={`${token}-${idx}`}
-                    className="inline-flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded border border-slate-200 bg-white text-[11px] font-mono font-semibold text-[#12273D] shadow-[0_1px_0_0_rgba(15,23,42,0.06)]"
+                    className="inline-flex items-center justify-center min-w-[22px] h-5 px-1 rounded border border-slate-200 bg-slate-50 text-[11px] font-mono font-semibold text-[#12273D]"
                   >
                     {token}
                   </kbd>
                 ))}
               </span>
             )}
-            <span className="text-[11px] text-slate-400">
-              {isRecording ? escLabel : clickToRecord}
-            </span>
           </button>
 
           {isModified && (
@@ -143,11 +147,13 @@ export function ShortcutRecorder({
               onClick={() => {
                 setErrorMsg(null);
                 setIsRecording(false);
-                onChange(defaultValue);
+                void Promise.resolve(onChange(defaultValue)).catch(() => {
+                  // Parent keeps the previous value if registration fails.
+                });
               }}
               title={resetSingleTooltip}
               aria-label={`${resetSingleTooltip} ${label}`}
-              className="h-10 w-10 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 hover:text-[#12273D] flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+              className="h-8 w-8 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 hover:text-[#12273D] flex items-center justify-center transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00845A]"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
@@ -155,9 +161,15 @@ export function ShortcutRecorder({
         </div>
       </div>
 
-      {errorMsg && (
-        <p className="mt-2 text-xs text-red-600 font-medium" role="alert">
-          {errorMsg}
+      {isRecording && (
+        <p className="mt-1.5 text-xs text-slate-500" aria-live="polite">
+          {cancelRecordingHint}
+        </p>
+      )}
+
+      {visibleError && (
+        <p className="mt-1.5 text-xs text-red-600 font-medium break-words" role="alert">
+          {visibleError}
         </p>
       )}
     </div>

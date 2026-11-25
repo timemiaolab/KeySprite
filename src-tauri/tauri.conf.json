@@ -15,15 +15,17 @@
       {
         "label": "preferences",
         "title": "KeySprite 设置",
-        "width": 560,
-        "height": 640,
+        "width": 440,
+        "height": 520,
         "resizable": false,
         "visible": false,
         "center": true,
         "skipTaskbar": true,
         "decorations": true,
         "titleBarStyle": "Overlay",
-        "hiddenTitle": true
+        "hiddenTitle": true,
+        "minWidth": 400,
+        "minHeight": 440
       }
     ],
     "security": {
