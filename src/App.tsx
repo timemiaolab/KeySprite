@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Globe, Minimize2, Power, RotateCcw } from 'lucide-react';
+import { Check, Power, RotateCcw } from 'lucide-react';
 import { KeySpriteAppIcon, KeySpriteTraySvg } from './components/AppLogo';
 import { ShortcutRecorder } from './components/ShortcutRecorder';
 import { SUPPORTED_LANGUAGES, TRANSLATIONS } from './i18n/translations';
 import {
   fetchDesktopConfig,
-  hideWindowToTray,
   isTauriDesktopRuntime,
   resetDesktopConfig,
   saveDesktopConfig,
@@ -136,17 +135,6 @@ export default function App() {
     );
   };
 
-  const handleMinimizeToTray = () => {
-    if (isNativeDesktop) {
-      void hideWindowToTray();
-      return;
-    }
-    setIsMinimizedToTray(true);
-    setTrayMenuOpen(true);
-    setTrayRunning(true);
-    setStatusKey('statusMinimized');
-  };
-
   const handleResetDefaults = () => {
     if (isNativeDesktop) {
       void resetDesktopConfig(config.targetOS)
@@ -172,6 +160,13 @@ export default function App() {
   const isModified =
     config.copyPathShortcut !== defaults.copyPathShortcut ||
     config.openTerminalShortcut !== defaults.openTerminalShortcut;
+
+  // Overlay titlebar inset + drag region only on the real macOS Tauri window.
+  const isMacNative =
+    isNativeDesktop &&
+    (config.targetOS === 'macos' ||
+      (typeof navigator !== 'undefined' &&
+        /mac/i.test(`${navigator.platform} ${navigator.userAgent}`)));
 
   const copyCompact = formatShortcutCompact(config.copyPathShortcut, config.targetOS);
   const termCompact = formatShortcutCompact(config.openTerminalShortcut, config.targetOS);
@@ -302,7 +297,18 @@ export default function App() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex items-center justify-center p-6">
+    <main
+      className={`min-h-screen bg-[#F8FAFC] text-[#0F172A] flex items-center justify-center relative ${
+        isMacNative ? 'pt-11 px-6 pb-6' : 'p-6'
+      }`}
+    >
+      {isMacNative && (
+        <div
+          data-tauri-drag-region
+          className="absolute inset-x-0 top-0 h-11 z-20"
+          aria-hidden="true"
+        />
+      )}
       <div className="w-full max-w-[600px] bg-white border border-slate-200 rounded-2xl overflow-hidden">
         {/* Header */}
         <header className="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
@@ -316,28 +322,8 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {/* 10-Language Selector (Default: 简体中文) */}
-            <label className="relative flex items-center">
-              <Globe
-                className="w-3.5 h-3.5 text-slate-400 pointer-events-none absolute left-2.5"
-                aria-hidden="true"
-              />
-              <select
-                aria-label={t.languageLabel}
-                value={config.language}
-                onChange={(e) => handleLanguageChange(e.target.value as LanguageCode)}
-                className="h-8 pl-7 pr-6 rounded-lg border border-slate-200 bg-slate-50 hover:border-slate-300 text-xs font-medium text-[#0F172A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00845A] cursor-pointer"
-              >
-                {SUPPORTED_LANGUAGES.map((lang) => (
-                  <option key={lang.code} value={lang.code}>
-                    {lang.nativeName}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {!isNativeDesktop && (
+          {!isNativeDesktop && (
+            <div className="flex items-center gap-2 shrink-0">
               <div
                 className="flex items-center gap-0.5 p-0.5 bg-slate-100 rounded-lg shrink-0"
                 role="tablist"
@@ -360,19 +346,8 @@ export default function App() {
                   </button>
                 ))}
               </div>
-            )}
-
-            {/* Minimize to System Tray Button */}
-            <button
-              type="button"
-              onClick={handleMinimizeToTray}
-              className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              title={t.minimizeToTray}
-            >
-              <Minimize2 className="w-3.5 h-3.5 text-[#12273D]" />
-              <span>{t.minimizeToTray}</span>
-            </button>
-          </div>
+            </div>
+          )}
         </header>
 
         {/* Core Body: Two Shortcut Settings + System Launch at Startup */}
@@ -452,8 +427,28 @@ export default function App() {
         </div>
 
         {/* Footer */}
-        <footer className="px-6 py-3.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between gap-4">
-          <span className="text-xs text-slate-500 truncate">{t[statusKey]}</span>
+        <footer className="px-6 py-3 bg-slate-50/80 border-t border-slate-100 flex items-center gap-3">
+          <div className="flex items-center gap-2 shrink-0">
+            <label
+              htmlFor="keysprite-language"
+              className="text-xs text-slate-500 whitespace-nowrap"
+            >
+              {t.languageLabel}
+            </label>
+            <select
+              id="keysprite-language"
+              value={config.language}
+              onChange={(e) => handleLanguageChange(e.target.value as LanguageCode)}
+              className="h-8 max-w-[10rem] px-2 rounded-lg border border-slate-200 bg-white hover:border-slate-300 text-xs font-medium text-[#0F172A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00845A] cursor-pointer"
+            >
+              {SUPPORTED_LANGUAGES.map((lang) => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.nativeName}
+                </option>
+              ))}
+            </select>
+          </div>
+          <span className="text-xs text-slate-500 truncate min-w-0 flex-1">{t[statusKey]}</span>
           <button
             type="button"
             onClick={handleResetDefaults}
