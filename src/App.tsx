@@ -61,7 +61,7 @@ function lastErrorFromRegistration(
   status: ShortcutRegistrationStatus | null
 ): ShortcutErrorPayload | null {
   if (!status) return null;
-  return status.copyPath.error ?? status.openTerminal.error ?? null;
+  return status.copyPath.error ?? status.openTerminal.error ?? status.fileHash?.error ?? null;
 }
 
 export default function App() {
@@ -70,6 +70,7 @@ export default function App() {
   const [statusKey, setStatusKey] = useState<
     | 'statusCopyUpdated'
     | 'statusTerminalUpdated'
+    | 'statusHashUpdated'
     | 'statusAutostartEnabled'
     | 'statusAutostartDisabled'
     | 'statusResetDone'
@@ -84,7 +85,7 @@ export default function App() {
   const [registrationError, setRegistrationError] = useState<ShortcutErrorPayload | null>(null);
   const [accessibility, setAccessibility] = useState<AccessibilityState>('unknown');
   const [shortcutFieldError, setShortcutFieldError] = useState<{
-    field: 'copyPathShortcut' | 'openTerminalShortcut';
+    field: 'copyPathShortcut' | 'openTerminalShortcut' | 'fileHashShortcut';
     message: string;
   } | null>(null);
 
@@ -210,9 +211,9 @@ export default function App() {
 
   const handleShortcutChange = useCallback(
     async (
-      field: 'copyPathShortcut' | 'openTerminalShortcut',
+      field: 'copyPathShortcut' | 'openTerminalShortcut' | 'fileHashShortcut',
       nextShortcut: string,
-      nextStatus: 'statusCopyUpdated' | 'statusTerminalUpdated'
+      nextStatus: 'statusCopyUpdated' | 'statusTerminalUpdated' | 'statusHashUpdated'
     ) => {
       const previous = config;
       const next = { ...config, [field]: nextShortcut };
@@ -249,6 +250,7 @@ export default function App() {
       targetOS: nextOS,
       copyPathShortcut: nextDefaults.copyPathShortcut,
       openTerminalShortcut: nextDefaults.openTerminalShortcut,
+      fileHashShortcut: nextDefaults.fileHashShortcut,
     }));
     setStatusKey(null);
   };
@@ -302,7 +304,8 @@ export default function App() {
   const defaults = getDefaultShortcutsForOS(config.targetOS);
   const isModified =
     config.copyPathShortcut !== defaults.copyPathShortcut ||
-    config.openTerminalShortcut !== defaults.openTerminalShortcut;
+    config.openTerminalShortcut !== defaults.openTerminalShortcut ||
+    config.fileHashShortcut !== defaults.fileHashShortcut;
 
   // Overlay titlebar inset + drag region only on the real macOS Tauri window.
   const isMacNative =
@@ -313,6 +316,7 @@ export default function App() {
 
   const copyCompact = formatShortcutCompact(config.copyPathShortcut, config.targetOS);
   const termCompact = formatShortcutCompact(config.openTerminalShortcut, config.targetOS);
+  const hashCompact = formatShortcutCompact(config.fileHashShortcut, config.targetOS);
 
   const statusView = resolveShortcutStatusView({
     isNativeDesktop,
@@ -320,6 +324,7 @@ export default function App() {
     loading: registrationLoading,
     copyPathRegistered: registration?.copyPath.registered ?? false,
     openTerminalRegistered: registration?.openTerminal.registered ?? false,
+    fileHashRegistered: registration?.fileHash?.registered ?? false,
     lastError: registrationError,
     accessibility,
   });
@@ -395,6 +400,10 @@ export default function App() {
               <div className="px-4 py-2 text-slate-400 flex items-center justify-between">
                 <span>{t.trayTerminalItem}</span>
                 <span className="font-mono">{termCompact}</span>
+              </div>
+              <div className="px-4 py-2 text-slate-400 flex items-center justify-between">
+                <span>{t.trayHashItem}</span>
+                <span className="font-mono">{hashCompact}</span>
               </div>
 
               <div className="my-1 border-t border-slate-100" />
@@ -516,7 +525,7 @@ export default function App() {
           description={t.copyPathDesc}
           value={config.copyPathShortcut}
           defaultValue={defaults.copyPathShortcut}
-          conflictWith={config.openTerminalShortcut}
+          conflictWith={[config.openTerminalShortcut, config.fileHashShortcut]}
           targetOS={config.targetOS}
           pressKeysPrompt={t.pressKeysPrompt}
           cancelRecordingHint={t.cancelRecordingHint}
@@ -537,7 +546,7 @@ export default function App() {
             description={t.openTerminalDesc}
             value={config.openTerminalShortcut}
             defaultValue={defaults.openTerminalShortcut}
-            conflictWith={config.copyPathShortcut}
+            conflictWith={[config.copyPathShortcut, config.fileHashShortcut]}
             targetOS={config.targetOS}
             pressKeysPrompt={t.pressKeysPrompt}
             cancelRecordingHint={t.cancelRecordingHint}
@@ -552,6 +561,32 @@ export default function App() {
             }
             onChange={(next) =>
               handleShortcutChange('openTerminalShortcut', next, 'statusTerminalUpdated')
+            }
+          />
+        </div>
+
+        <div className="border-t border-slate-200">
+          <ShortcutRecorder
+            id="file-hash-shortcut"
+            label={t.fileHashLabel}
+            description={t.fileHashDesc}
+            value={config.fileHashShortcut}
+            defaultValue={defaults.fileHashShortcut}
+            conflictWith={[config.copyPathShortcut, config.openTerminalShortcut]}
+            targetOS={config.targetOS}
+            pressKeysPrompt={t.pressKeysPrompt}
+            cancelRecordingHint={t.cancelRecordingHint}
+            recordShortcutAria={t.recordShortcutAria}
+            resetSingleTooltip={t.resetSingleTooltip}
+            needModifierError={t.needModifierError}
+            conflictError={t.conflictError}
+            externalError={
+              shortcutFieldError?.field === 'fileHashShortcut'
+                ? shortcutFieldError.message
+                : null
+            }
+            onChange={(next) =>
+              handleShortcutChange('fileHashShortcut', next, 'statusHashUpdated')
             }
           />
         </div>

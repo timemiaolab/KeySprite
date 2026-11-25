@@ -30,6 +30,7 @@ export interface RustAppConfigPayload {
   language: LanguageCode;
   copyPathShortcut: string;
   openTerminalShortcut: string;
+  fileHashShortcut: string;
   macTerminal: 'terminal' | 'iterm2' | 'warp';
   winTerminal: 'windows_terminal' | 'power_shell' | 'cmd';
   linuxTerminal: 'auto' | 'gnome_terminal' | 'konsole' | 'alacritty' | 'kitty';
@@ -46,6 +47,7 @@ function toDesktopConfig(
     targetOS,
     ...rustCfg,
     language: rustCfg.language || 'zh-CN',
+    fileHashShortcut: rustCfg.fileHashShortcut || (targetOS === 'macos' ? 'Super+8' : 'Alt+8'),
   };
 }
 
@@ -66,6 +68,7 @@ export async function saveDesktopConfig(config: KeySpriteConfig): Promise<KeySpr
     language: config.language,
     copyPathShortcut: config.copyPathShortcut,
     openTerminalShortcut: config.openTerminalShortcut,
+    fileHashShortcut: config.fileHashShortcut,
     macTerminal: config.macTerminal,
     winTerminal: config.winTerminal,
     linuxTerminal: config.linuxTerminal,

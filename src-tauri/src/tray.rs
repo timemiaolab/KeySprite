@@ -12,6 +12,7 @@ pub const TRAY_ID: &str = "keysprite-tray";
 struct TrayLabels {
     copy_path: &'static str,
     open_terminal: &'static str,
+    file_hash: &'static str,
     settings: &'static str,
     autostart: &'static str,
     quit: &'static str,
@@ -22,6 +23,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
         "zh-TW" => TrayLabels {
             copy_path: "複製路徑",
             open_terminal: "開啟終端機",
+            file_hash: "計算檔案雜湊",
             settings: "設定",
             autostart: "開機自動啟動",
             quit: "結束 KeySprite",
@@ -29,6 +31,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
         "en" => TrayLabels {
             copy_path: "Copy Path",
             open_terminal: "Open Terminal",
+            file_hash: "File SHA256 & MD5",
             settings: "Settings",
             autostart: "Launch at Startup",
             quit: "Quit KeySprite",
@@ -36,6 +39,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
         "ja" => TrayLabels {
             copy_path: "パスをコピー",
             open_terminal: "ターミナルを開く",
+            file_hash: "SHA256 / MD5 計算",
             settings: "設定",
             autostart: "ログイン時に起動",
             quit: "KeySprite を終了",
@@ -43,6 +47,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
         "ko" => TrayLabels {
             copy_path: "경로 복사",
             open_terminal: "터미널 열기",
+            file_hash: "SHA256 / MD5 계산",
             settings: "설정",
             autostart: "시스템 시작 시 자동 실행",
             quit: "KeySprite 종료",
@@ -50,6 +55,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
         "es" => TrayLabels {
             copy_path: "Copiar ruta",
             open_terminal: "Abrir terminal",
+            file_hash: "Hash SHA256 y MD5",
             settings: "Configuración",
             autostart: "Iniciar con el sistema",
             quit: "Salir de KeySprite",
@@ -57,6 +63,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
         "fr" => TrayLabels {
             copy_path: "Copier le chemin",
             open_terminal: "Ouvrir le terminal",
+            file_hash: "Empreinte SHA256 & MD5",
             settings: "Paramètres",
             autostart: "Lancer au démarrage",
             quit: "Quitter KeySprite",
@@ -64,6 +71,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
         "de" => TrayLabels {
             copy_path: "Pfad kopieren",
             open_terminal: "Terminal öffnen",
+            file_hash: "SHA256 & MD5 berechnen",
             settings: "Einstellungen",
             autostart: "Beim Systemstart ausführen",
             quit: "KeySprite beenden",
@@ -71,6 +79,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
         "pt" => TrayLabels {
             copy_path: "Copiar caminho",
             open_terminal: "Abrir terminal",
+            file_hash: "Hash SHA256 e MD5",
             settings: "Configurações",
             autostart: "Iniciar com o sistema",
             quit: "Sair do KeySprite",
@@ -78,6 +87,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
         "ru" => TrayLabels {
             copy_path: "Копировать путь",
             open_terminal: "Открыть терминал",
+            file_hash: "SHA256 и MD5 файла",
             settings: "Настройки",
             autostart: "Запуск при входе",
             quit: "Выйти из KeySprite",
@@ -85,6 +95,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
         _ => TrayLabels {
             copy_path: "复制路径",
             open_terminal: "打开终端",
+            file_hash: "计算文件校验值",
             settings: "设置",
             autostart: "开机自启",
             quit: "退出 KeySprite",
@@ -158,9 +169,15 @@ fn create_tray_menu(app: &AppHandle, config: &AppConfig) -> tauri::Result<Menu<t
         labels.open_terminal,
         format_display_shortcut(&config.open_terminal_shortcut)
     );
+    let hash_label = format!(
+        "{} ({})",
+        labels.file_hash,
+        format_display_shortcut(&config.file_hash_shortcut)
+    );
 
     let status_copy = MenuItem::with_id(app, "status_copy", copy_label, false, None::<&str>)?;
     let status_term = MenuItem::with_id(app, "status_term", term_label, false, None::<&str>)?;
+    let status_hash = MenuItem::with_id(app, "status_hash", hash_label, false, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
     let settings_item = MenuItem::with_id(app, "open_settings", labels.settings, true, None::<&str>)?;
     let autostart_item = CheckMenuItem::with_id(
@@ -179,6 +196,7 @@ fn create_tray_menu(app: &AppHandle, config: &AppConfig) -> tauri::Result<Menu<t
         &[
             &status_copy,
             &status_term,
+            &status_hash,
             &sep1,
             &settings_item,
             &autostart_item,

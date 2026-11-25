@@ -25,6 +25,7 @@ export interface ShortcutBindStatus {
 export interface ShortcutRegistrationStatus {
   copyPath: ShortcutBindStatus;
   openTerminal: ShortcutBindStatus;
+  fileHash: ShortcutBindStatus;
 }
 
 export type ShortcutStatusInput = {
@@ -33,6 +34,7 @@ export type ShortcutStatusInput = {
   loading: boolean;
   copyPathRegistered: boolean;
   openTerminalRegistered: boolean;
+  fileHashRegistered: boolean;
   lastError: ShortcutErrorPayload | null;
   accessibility: AccessibilityState;
 };
@@ -62,7 +64,8 @@ export function resolveShortcutStatusView(input: ShortcutStatusInput): ShortcutS
     return { banner: 'loading', activation, showAccessibilityHint: false };
   }
 
-  const allRegistered = input.copyPathRegistered && input.openTerminalRegistered;
+  const allRegistered =
+    input.copyPathRegistered && input.openTerminalRegistered && input.fileHashRegistered;
   const failed = !allRegistered || input.lastError !== null;
   const showAccessibilityHint =
     failed && input.targetOS === 'macos' && input.accessibility === 'denied';

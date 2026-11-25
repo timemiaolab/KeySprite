@@ -1,7 +1,12 @@
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Mutex;
 
+use md5::Md5;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
@@ -71,6 +76,7 @@ pub struct ShortcutBindStatus {
 pub struct ShortcutRegistrationStatus {
     pub copy_path: ShortcutBindStatus,
     pub open_terminal: ShortcutBindStatus,
+    pub file_hash: ShortcutBindStatus,
 }
 
 impl ShortcutRegistrationStatus {
@@ -84,6 +90,11 @@ impl ShortcutRegistrationStatus {
             open_terminal: ShortcutBindStatus {
                 registered: false,
                 shortcut: config.open_terminal_shortcut.clone(),
+                error: None,
+            },
+            file_hash: ShortcutBindStatus {
+                registered: false,
+                shortcut: config.file_hash_shortcut.clone(),
                 error: None,
             },
         }
@@ -116,76 +127,56 @@ fn store_registration_status(app: &AppHandle, status: ShortcutRegistrationStatus
 pub enum SpriteAction {
     CopyPath,
     OpenTerminal,
+    FileHash,
 }
 
 pub fn register_shortcuts(app: &AppHandle, config: &AppConfig) -> Result<(), ShortcutError> {
-    // Parse both shortcuts before touching the current registration, so a typo
-    // cannot wipe the previous bindings.
+    // Parse all three shortcuts before touching current registration, so a typo
+    // cannot wipe existing bindings.
     let copy_shortcut = Shortcut::from_str(&config.copy_path_shortcut).map_err(|e| {
         let err = ShortcutError::invalid_format(
             "copyPath",
             &config.copy_path_shortcut,
             e.to_string(),
         );
-        store_registration_status(
-            app,
-            ShortcutRegistrationStatus {
-                copy_path: ShortcutBindStatus {
-                    registered: false,
-                    shortcut: config.copy_path_shortcut.clone(),
-                    error: Some(err.clone()),
-                },
-                open_terminal: ShortcutBindStatus {
-                    registered: false,
-                    shortcut: config.open_terminal_shortcut.clone(),
-                    error: None,
-                },
-            },
-        );
+        let mut status = ShortcutRegistrationStatus::from_config(config);
+        status.copy_path.error = Some(err.clone());
+        store_registration_status(app, status);
         err
     })?;
+
     let term_shortcut = Shortcut::from_str(&config.open_terminal_shortcut).map_err(|e| {
         let err = ShortcutError::invalid_format(
             "openTerminal",
             &config.open_terminal_shortcut,
             e.to_string(),
         );
-        store_registration_status(
-            app,
-            ShortcutRegistrationStatus {
-                copy_path: ShortcutBindStatus {
-                    registered: false,
-                    shortcut: config.copy_path_shortcut.clone(),
-                    error: None,
-                },
-                open_terminal: ShortcutBindStatus {
-                    registered: false,
-                    shortcut: config.open_terminal_shortcut.clone(),
-                    error: Some(err.clone()),
-                },
-            },
+        let mut status = ShortcutRegistrationStatus::from_config(config);
+        status.open_terminal.error = Some(err.clone());
+        store_registration_status(app, status);
+        err
+    })?;
+
+    let hash_shortcut = Shortcut::from_str(&config.file_hash_shortcut).map_err(|e| {
+        let err = ShortcutError::invalid_format(
+            "fileHash",
+            &config.file_hash_shortcut,
+            e.to_string(),
         );
+        let mut status = ShortcutRegistrationStatus::from_config(config);
+        status.file_hash.error = Some(err.clone());
+        store_registration_status(app, status);
         err
     })?;
 
     let gs = app.global_shortcut();
     if let Err(e) = gs.unregister_all() {
         let err = ShortcutError::unregister_failed(e.to_string());
-        store_registration_status(
-            app,
-            ShortcutRegistrationStatus {
-                copy_path: ShortcutBindStatus {
-                    registered: false,
-                    shortcut: config.copy_path_shortcut.clone(),
-                    error: Some(err.clone()),
-                },
-                open_terminal: ShortcutBindStatus {
-                    registered: false,
-                    shortcut: config.open_terminal_shortcut.clone(),
-                    error: Some(err.clone()),
-                },
-            },
-        );
+        let mut status = ShortcutRegistrationStatus::from_config(config);
+        status.copy_path.error = Some(err.clone());
+        status.open_terminal.error = Some(err.clone());
+        status.file_hash.error = Some(err.clone());
+        store_registration_status(app, status);
         return Err(err);
     }
 
@@ -209,6 +200,17 @@ pub fn register_shortcuts(app: &AppHandle, config: &AppConfig) -> Result<(), Sho
             ShortcutError::register_failed("openTerminal", &config.open_terminal_shortcut, e.to_string())
         });
 
+    let hash_error = gs
+        .on_shortcut(hash_shortcut, move |app, _shortcut, event| {
+            if event.state() == ShortcutState::Pressed {
+                handle_shortcut_action(app, SpriteAction::FileHash);
+            }
+        })
+        .err()
+        .map(|e| {
+            ShortcutError::register_failed("fileHash", &config.file_hash_shortcut, e.to_string())
+        });
+
     let status = ShortcutRegistrationStatus {
         copy_path: ShortcutBindStatus {
             registered: copy_error.is_none(),
@@ -220,17 +222,22 @@ pub fn register_shortcuts(app: &AppHandle, config: &AppConfig) -> Result<(), Sho
             shortcut: config.open_terminal_shortcut.clone(),
             error: term_error.clone(),
         },
+        file_hash: ShortcutBindStatus {
+            registered: hash_error.is_none(),
+            shortcut: config.file_hash_shortcut.clone(),
+            error: hash_error.clone(),
+        },
     };
     store_registration_status(app, status);
 
-    if let Some(err) = copy_error.or(term_error) {
+    if let Some(err) = copy_error.or(term_error).or(hash_error) {
         return Err(err);
     }
     Ok(())
 }
 
 pub fn handle_shortcut_action(app: &AppHandle, action: SpriteAction) {
-    // 1. 上下文防冲突检测：仅当 Finder / Explorer / 桌面 位于前台时执行
+    // 1. 上下文防冲突检测：仅当 Finder / Explorer / Linux 文件管理器 / 桌面 位于前台时执行
     if !is_file_manager_active() {
         return;
     }
@@ -277,5 +284,106 @@ pub fn handle_shortcut_action(app: &AppHandle, action: SpriteAction) {
                 }
             }
         }
+        SpriteAction::FileHash => {
+            // 仅处理实际文件（明确排除文件夹）
+            let files: Vec<_> = ctx
+                .selected_items
+                .into_iter()
+                .filter(|item| !item.is_dir && item.path.is_file())
+                .map(|item| item.path)
+                .collect();
+
+            if files.is_empty() {
+                if config.show_notifications {
+                    let _ = app
+                        .notification()
+                        .builder()
+                        .title("KeySprite")
+                        .body("请先选中文件（不支持计算文件夹）")
+                        .show();
+                }
+                return;
+            }
+
+            let app_handle = app.clone();
+            let show_notifications = config.show_notifications;
+            std::thread::spawn(move || {
+                let mut blocks = Vec::with_capacity(files.len());
+                for path in &files {
+                    match compute_file_sha256_and_md5(path) {
+                        Ok((sha256_hex, md5_hex)) => {
+                            let file_name = path
+                                .file_name()
+                                .map(|n| n.to_string_lossy().into_owned())
+                                .unwrap_or_else(|| path.to_string_lossy().into_owned());
+                            blocks.push(format!(
+                                "File: {file_name}\nSHA256: {sha256_hex}\nMD5: {md5_hex}"
+                            ));
+                        }
+                        Err(err) => {
+                            if show_notifications {
+                                let _ = app_handle
+                                    .notification()
+                                    .builder()
+                                    .title("KeySprite · 计算文件校验值失败")
+                                    .body(err)
+                                    .show();
+                            }
+                            return;
+                        }
+                    }
+                }
+
+                let clipboard_text = blocks.join("\n\n");
+                if app_handle.clipboard().write_text(clipboard_text.clone()).is_ok()
+                    && show_notifications
+                {
+                    let summary = if files.len() > 1 {
+                        format!("已计算 {} 个文件的 SHA256 与 MD5 并复制到剪贴板", files.len())
+                    } else {
+                        clipboard_text
+                    };
+                    let _ = app_handle
+                        .notification()
+                        .builder()
+                        .title("KeySprite · 已复制 SHA256 与 MD5")
+                        .body(summary)
+                        .show();
+                }
+            });
+        }
     }
+}
+
+fn compute_file_sha256_and_md5(path: &Path) -> Result<(String, String), String> {
+    let file = File::open(path).map_err(|e| format!("无法读取文件 {}: {e}", path.display()))?;
+    let mut reader = BufReader::with_capacity(64 * 1024, file);
+    let mut sha256 = Sha256::new();
+    let mut md5 = Md5::new();
+    let mut buffer = [0u8; 64 * 1024];
+
+    loop {
+        let bytes_read = reader
+            .read(&mut buffer)
+            .map_err(|e| format!("读取文件失败: {e}"))?;
+        if bytes_read == 0 {
+            break;
+        }
+        sha256.update(&buffer[..bytes_read]);
+        md5.update(&buffer[..bytes_read]);
+    }
+
+    let sha256_bytes = sha256.finalize();
+    let md5_bytes = md5.finalize();
+    Ok((to_lower_hex(&sha256_bytes), to_lower_hex(&md5_bytes)))
+}
+
+fn to_lower_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        out.push(HEX[(b >> 4) as usize] as char);
+        out.push(HEX[(b & 0x0f) as usize] as char);
+    }
+    out
 }

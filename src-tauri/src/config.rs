@@ -45,6 +45,8 @@ pub struct AppConfig {
     pub language: String,
     pub copy_path_shortcut: String,
     pub open_terminal_shortcut: String,
+    #[serde(default = "default_file_hash_shortcut")]
+    pub file_hash_shortcut: String,
     pub mac_terminal: MacTerminal,
     pub win_terminal: WinTerminal,
     #[serde(default = "default_linux_terminal")]
@@ -62,24 +64,38 @@ fn default_linux_terminal() -> LinuxTerminal {
     LinuxTerminal::Auto
 }
 
+fn default_file_hash_shortcut() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        "Super+8".to_string()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        "Alt+8".to_string()
+    }
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         #[cfg(target_os = "macos")]
-        let (copy_shortcut, terminal_shortcut) = (
+        let (copy_shortcut, terminal_shortcut, hash_shortcut) = (
             "Super+9".to_string(),
             "Super+0".to_string(),
+            "Super+8".to_string(),
         );
 
         #[cfg(not(target_os = "macos"))]
-        let (copy_shortcut, terminal_shortcut) = (
+        let (copy_shortcut, terminal_shortcut, hash_shortcut) = (
             "Alt+9".to_string(),
             "Alt+0".to_string(),
+            "Alt+8".to_string(),
         );
 
         Self {
             language: default_language(),
             copy_path_shortcut: copy_shortcut,
             open_terminal_shortcut: terminal_shortcut,
+            file_hash_shortcut: hash_shortcut,
             mac_terminal: MacTerminal::Terminal,
             win_terminal: WinTerminal::WindowsTerminal,
             linux_terminal: LinuxTerminal::Auto,

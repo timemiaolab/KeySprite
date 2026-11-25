@@ -51,6 +51,7 @@ describe('resolveShortcutStatusView', () => {
       loading: false,
       copyPathRegistered: true,
       openTerminalRegistered: true,
+      fileHashRegistered: true,
       lastError: null,
       accessibility: 'denied',
     });
@@ -66,6 +67,7 @@ describe('resolveShortcutStatusView', () => {
       loading: true,
       copyPathRegistered: false,
       openTerminalRegistered: false,
+      fileHashRegistered: false,
       lastError: null,
       accessibility: 'unknown',
     });
@@ -80,6 +82,7 @@ describe('resolveShortcutStatusView', () => {
       loading: true,
       copyPathRegistered: false,
       openTerminalRegistered: false,
+      fileHashRegistered: false,
       lastError: null,
       accessibility: 'denied',
     });
@@ -87,13 +90,14 @@ describe('resolveShortcutStatusView', () => {
     assert.equal(view.showAccessibilityHint, false);
   });
 
-  it('reports success only when both shortcuts registered without an error', () => {
+  it('reports success only when all three shortcuts registered without an error', () => {
     const view = resolveShortcutStatusView({
       isNativeDesktop: true,
       targetOS: 'windows',
       loading: false,
       copyPathRegistered: true,
       openTerminalRegistered: true,
+      fileHashRegistered: true,
       lastError: null,
       accessibility: 'unknown',
     });
@@ -108,11 +112,26 @@ describe('resolveShortcutStatusView', () => {
       loading: false,
       copyPathRegistered: true,
       openTerminalRegistered: false,
+      fileHashRegistered: true,
       lastError: { code: 'register_failed', action: 'openTerminal', message: 'already registered' },
       accessibility: 'unknown',
     });
     assert.equal(view.banner, 'failed');
     assert.equal(view.showAccessibilityHint, false);
+  });
+
+  it('surfaces failure when fileHash shortcut is not registered', () => {
+    const view = resolveShortcutStatusView({
+      isNativeDesktop: true,
+      targetOS: 'macos',
+      loading: false,
+      copyPathRegistered: true,
+      openTerminalRegistered: true,
+      fileHashRegistered: false,
+      lastError: null,
+      accessibility: 'unknown',
+    });
+    assert.equal(view.banner, 'failed');
   });
 
   it('shows the macOS accessibility hint only when the real check is denied', () => {
@@ -122,6 +141,7 @@ describe('resolveShortcutStatusView', () => {
       loading: false,
       copyPathRegistered: false,
       openTerminalRegistered: false,
+      fileHashRegistered: false,
       lastError: { code: 'register_failed', message: 'os error' },
       accessibility: 'denied',
     });
@@ -133,6 +153,7 @@ describe('resolveShortcutStatusView', () => {
       loading: false,
       copyPathRegistered: false,
       openTerminalRegistered: false,
+      fileHashRegistered: false,
       lastError: { code: 'register_failed', message: 'os error' },
       accessibility: 'unknown',
     });

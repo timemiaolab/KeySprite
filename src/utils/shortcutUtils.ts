@@ -5,6 +5,7 @@ export const DEFAULT_CONFIG_MACOS: KeySpriteConfig = {
   targetOS: 'macos',
   copyPathShortcut: 'Super+9',
   openTerminalShortcut: 'Super+0',
+  fileHashShortcut: 'Super+8',
   macTerminal: 'terminal',
   winTerminal: 'windows_terminal',
   linuxTerminal: 'auto',
@@ -18,6 +19,7 @@ export const DEFAULT_CONFIG_WINDOWS: KeySpriteConfig = {
   targetOS: 'windows',
   copyPathShortcut: 'Alt+9',
   openTerminalShortcut: 'Alt+0',
+  fileHashShortcut: 'Alt+8',
   macTerminal: 'terminal',
   winTerminal: 'windows_terminal',
   linuxTerminal: 'auto',
@@ -31,6 +33,7 @@ export const DEFAULT_CONFIG_LINUX: KeySpriteConfig = {
   targetOS: 'linux',
   copyPathShortcut: 'Alt+9',
   openTerminalShortcut: 'Alt+0',
+  fileHashShortcut: 'Alt+8',
   macTerminal: 'terminal',
   winTerminal: 'windows_terminal',
   linuxTerminal: 'auto',
@@ -48,16 +51,19 @@ export function getDefaultConfigForOS(os: TargetOS): KeySpriteConfig {
 export function getDefaultShortcutsForOS(os: TargetOS): {
   copyPathShortcut: string;
   openTerminalShortcut: string;
+  fileHashShortcut: string;
 } {
   if (os === 'macos') {
     return {
       copyPathShortcut: 'Super+9',
       openTerminalShortcut: 'Super+0',
+      fileHashShortcut: 'Super+8',
     };
   }
   return {
     copyPathShortcut: 'Alt+9',
     openTerminalShortcut: 'Alt+0',
+    fileHashShortcut: 'Alt+8',
   };
 }
 

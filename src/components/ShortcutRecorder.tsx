@@ -12,7 +12,7 @@ interface ShortcutRecorderProps {
   description: string;
   value: string;
   defaultValue: string;
-  conflictWith?: string;
+  conflictWith?: string | string[];
   targetOS: TargetOS;
   pressKeysPrompt?: string;
   cancelRecordingHint?: string;
@@ -67,7 +67,12 @@ export function ShortcutRecorder({
         return;
       }
 
-      if (conflictWith && shortcut === conflictWith) {
+      const conflictList = Array.isArray(conflictWith)
+        ? conflictWith
+        : conflictWith
+        ? [conflictWith]
+        : [];
+      if (conflictList.includes(shortcut)) {
         setErrorMsg(conflictError);
         return;
       }

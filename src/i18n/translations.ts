@@ -68,6 +68,10 @@ export interface TranslationStrings {
   macAccessibilityHint: string;
   openAccessibilitySettings: string;
   recordShortcutAria: string;
+  fileHashLabel: string;
+  fileHashDesc: string;
+  statusHashUpdated: string;
+  trayHashItem: string;
 }
 
 export const TRANSLATIONS: Record<LanguageCode, TranslationStrings> = {
@@ -121,6 +125,10 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationStrings> = {
     macAccessibilityHint: '需要辅助功能权限才能注册全局快捷键。',
     openAccessibilitySettings: '打开系统设置',
     recordShortcutAria: '修改快捷键',
+    fileHashLabel: '计算文件 SHA256 与 MD5',
+    fileHashDesc: '仅针对选中的文件（非文件夹）计算 SHA256 和 MD5 值并复制到剪贴板。',
+    statusHashUpdated: '已更新「文件校验值」快捷键并保存',
+    trayHashItem: '计算文件校验值',
   },
   'zh-TW': {
     appName: 'KeySprite 快捷鍵精靈',
@@ -172,6 +180,10 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationStrings> = {
     macAccessibilityHint: '需要輔助使用權限才能註冊全域快捷鍵。',
     openAccessibilitySettings: '打開系統設定',
     recordShortcutAria: '修改快捷鍵',
+    fileHashLabel: '計算檔案 SHA256 與 MD5',
+    fileHashDesc: '僅針對選取的檔案（非資料夾）計算 SHA256 與 MD5 值並複製到剪貼簿。',
+    statusHashUpdated: '已更新「檔案雜湊值」快捷鍵並儲存',
+    trayHashItem: '計算檔案雜湊',
   },
   en: {
     appName: 'KeySprite',
@@ -223,6 +235,10 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationStrings> = {
     macAccessibilityHint: 'Accessibility permission is required to register global shortcuts.',
     openAccessibilitySettings: 'Open System Settings',
     recordShortcutAria: 'Change shortcut',
+    fileHashLabel: 'Calculate file SHA256 & MD5',
+    fileHashDesc: 'Computes SHA256 and MD5 checksums for selected files (folders excluded) and copies them to the clipboard.',
+    statusHashUpdated: 'Updated "File SHA256 & MD5" shortcut',
+    trayHashItem: 'File SHA256 & MD5',
   },
   ja: {
     appName: 'KeySprite',
@@ -274,6 +290,10 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationStrings> = {
     macAccessibilityHint: 'グローバルショートカットを登録するにはアクセシビリティ権限が必要です。',
     openAccessibilitySettings: 'システム設定を開く',
     recordShortcutAria: 'ショートカットを変更',
+    fileHashLabel: 'ファイルの SHA256 と MD5 を計算',
+    fileHashDesc: '選択したファイル（フォルダ除外）の SHA256 と MD5 を計算してクリップボードにコピーします。',
+    statusHashUpdated: '「SHA256 / MD5 計算」のショートカットを保存しました',
+    trayHashItem: 'SHA256 / MD5 計算',
   },
   ko: {
     appName: 'KeySprite',
@@ -325,6 +345,10 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationStrings> = {
     macAccessibilityHint: '전역 단축키를 등록하려면 손쉬운 사용 권한이 필요합니다.',
     openAccessibilitySettings: '시스템 설정 열기',
     recordShortcutAria: '단축키 변경',
+    fileHashLabel: '파일 SHA256 및 MD5 계산',
+    fileHashDesc: '선택한 파일(폴더 제외)의 SHA256과 MD5 값을 계산하여 클립보드에 복사합니다.',
+    statusHashUpdated: '“SHA256 / MD5 계산” 단축키를 저장했습니다',
+    trayHashItem: 'SHA256 / MD5 계산',
   },
   es: {
     appName: 'KeySprite',
@@ -376,6 +400,10 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationStrings> = {
     macAccessibilityHint: 'Se necesita el permiso de accesibilidad para registrar atajos globales.',
     openAccessibilitySettings: 'Abrir Ajustes del sistema',
     recordShortcutAria: 'Cambiar atajo',
+    fileHashLabel: 'Calcular SHA256 y MD5 del archivo',
+    fileHashDesc: 'Calcula los valores SHA256 y MD5 de los archivos seleccionados (no carpetas) y los copia al portapapeles.',
+    statusHashUpdated: 'Se guardó el atajo «SHA256 y MD5»',
+    trayHashItem: 'Hash SHA256 y MD5',
   },
   fr: {
     appName: 'KeySprite',
@@ -427,6 +455,10 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationStrings> = {
     macAccessibilityHint: 'L’autorisation d’accessibilité est requise pour enregistrer des raccourcis globaux.',
     openAccessibilitySettings: 'Ouvrir Réglages Système',
     recordShortcutAria: 'Modifier le raccourci',
+    fileHashLabel: 'Calculer SHA256 et MD5 du fichier',
+    fileHashDesc: 'Calcule le SHA256 et le MD5 des fichiers sélectionnés (hors dossiers) et les copie dans le presse-papiers.',
+    statusHashUpdated: 'Raccourci « Empreinte SHA256 & MD5 » enregistré',
+    trayHashItem: 'Empreinte SHA256 & MD5',
   },
   de: {
     appName: 'KeySprite',
@@ -478,6 +510,10 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationStrings> = {
     macAccessibilityHint: 'Für globale Tastenkürzel ist die Bedienungshilfen-Berechtigung erforderlich.',
     openAccessibilitySettings: 'Systemeinstellungen öffnen',
     recordShortcutAria: 'Tastenkürzel ändern',
+    fileHashLabel: 'SHA256 & MD5 der Datei berechnen',
+    fileHashDesc: 'Berechnet SHA256 und MD5 für ausgewählte Dateien (keine Ordner) und kopiert sie in die Zwischenablage.',
+    statusHashUpdated: 'Kürzel „SHA256 & MD5 berechnen“ gespeichert',
+    trayHashItem: 'SHA256 & MD5 berechnen',
   },
   pt: {
     appName: 'KeySprite',
@@ -529,6 +565,10 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationStrings> = {
     macAccessibilityHint: 'É necessária a permissão de acessibilidade para registrar atalhos globais.',
     openAccessibilitySettings: 'Abrir Ajustes do Sistema',
     recordShortcutAria: 'Alterar atalho',
+    fileHashLabel: 'Calcular SHA256 e MD5 do arquivo',
+    fileHashDesc: 'Calcula o SHA256 e MD5 dos arquivos selecionados (exceto pastas) e copia para a área de transferência.',
+    statusHashUpdated: 'Atalho «SHA256 e MD5» salvo',
+    trayHashItem: 'Hash SHA256 e MD5',
   },
   ru: {
     appName: 'KeySprite',
@@ -580,6 +620,10 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationStrings> = {
     macAccessibilityHint: 'Для регистрации глобальных сочетаний нужно разрешение Универсального доступа.',
     openAccessibilitySettings: 'Открыть системные настройки',
     recordShortcutAria: 'Изменить сочетание клавиш',
+    fileHashLabel: 'Вычислить SHA256 и MD5 файла',
+    fileHashDesc: 'Вычисляет SHA256 и MD5 выбранных файлов (не папок) и копирует значения в буфер обмена.',
+    statusHashUpdated: 'Сочетание «SHA256 и MD5 файла» сохранено',
+    trayHashItem: 'SHA256 и MD5 файла',
   },
 };
 

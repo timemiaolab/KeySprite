@@ -22,6 +22,7 @@ export interface KeySpriteConfig {
   targetOS: TargetOS;
   copyPathShortcut: string;
   openTerminalShortcut: string;
+  fileHashShortcut: string;
   macTerminal: MacTerminal;
   winTerminal: WinTerminal;
   linuxTerminal: LinuxTerminal;
