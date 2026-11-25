@@ -1,0 +1,6 @@
+{
+  "name": "KeySprite 快捷键精灵",
+  "description": "轻量化跨平台系统托盘效率工具（Tauri v2 + Rust）：支持文件管理器上下文识别、快速复制路径与直达终端。",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
