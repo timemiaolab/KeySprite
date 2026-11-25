@@ -10,4 +10,4 @@
 [command + 0] 打开终端
 
 ### 这是软件界面截图
-[key-Sprite.png](https://postimg.cc/w12xN7nt)
+[![key-Sprite.png](https://i.postimg.cc/d0PhzCB9/key-Sprite.png)](https://postimg.cc/w12xN7nt)
