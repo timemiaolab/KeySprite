@@ -5,7 +5,6 @@ pub mod tray;
 
 use tauri::{AppHandle, Manager, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
-use tauri_plugin_notification::NotificationExt;
 
 use crate::config::{load_config, save_config, AppConfig};
 use crate::platform::{
@@ -42,8 +41,18 @@ fn save_and_reload_config(app: AppHandle, new_config: AppConfig) -> Result<AppCo
 
 #[tauri::command]
 fn reset_default_config(app: AppHandle) -> Result<AppConfig, String> {
-    let defaults = AppConfig::default();
+    let current = load_config(&app);
+    let mut defaults = AppConfig::default();
+    defaults.language = current.language;
+    defaults.autostart = current.autostart;
     save_and_reload_config(app, defaults)
+}
+
+#[tauri::command]
+fn hide_to_tray(app: AppHandle) {
+    if let Some(win) = app.get_webview_window("preferences") {
+        let _ = win.hide();
+    }
 }
 
 #[tauri::command]
@@ -68,34 +77,24 @@ pub fn run() {
             Some(vec!["--minimized"]),
         ))
         .setup(|app| {
-            // 隐藏 macOS Dock 图标，以常驻菜单栏托盘形式运行
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let handle = app.handle();
-            // 首次启动即自动写入并激活两个默认快捷键（macOS: Cmd+9/0；Windows & Linux: Alt+9/0）
             let config = load_config(handle);
 
             build_tray(handle, &config)?;
             register_shortcuts(handle, &config)?;
 
-            // 非静默开机自启时，首次打开提示默认快捷键已就绪
+            // 手动打开时显示设置窗；开机自启 (--minimized) 时直接静默驻留托盘
             let is_minimized = std::env::args().any(|arg| arg == "--minimized");
-            if !is_minimized && config.show_notifications {
-                let copy_label = config.copy_path_shortcut.replace("Super+", "Cmd+");
-                let term_label = config.open_terminal_shortcut.replace("Super+", "Cmd+");
-                let _ = handle
-                    .notification()
-                    .builder()
-                    .title("KeySprite 已常驻系统托盘")
-                    .body(format!(
-                        "默认快捷键已就绪：复制路径 ({copy_label}) · 打开终端 ({term_label})"
-                    ))
-                    .show();
-            }
-
-            // 点击设置窗口关闭按钮时隐藏而非退出常驻进程
             if let Some(win) = app.get_webview_window("preferences") {
+                if !is_minimized {
+                    let _ = win.show();
+                    let _ = win.set_focus();
+                }
+
+                // 点击关闭按钮时收起到系统托盘而不退出常驻进程
                 let win_clone = win.clone();
                 win.on_window_event(move |event| {
                     if let WindowEvent::CloseRequested { api, .. } = event {
@@ -105,15 +104,6 @@ pub fn run() {
                 });
             }
 
-            // macOS 首次启动辅助功能权限检测
-            #[cfg(target_os = "macos")]
-            if !check_accessibility_permission() {
-                if let Some(win) = app.get_webview_window("preferences") {
-                    let _ = win.show();
-                    let _ = win.set_focus();
-                }
-            }
-
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -121,6 +111,7 @@ pub fn run() {
             get_config,
             save_and_reload_config,
             reset_default_config,
+            hide_to_tray,
             check_permissions,
             request_accessibility_settings
         ])

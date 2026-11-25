@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { RotateCcw } from 'lucide-react';
-import { KeySpriteAppIcon } from './components/AppLogo';
+import { Check, Globe, Minimize2, Power, RotateCcw } from 'lucide-react';
+import { KeySpriteAppIcon, KeySpriteTraySvg } from './components/AppLogo';
 import { ShortcutRecorder } from './components/ShortcutRecorder';
+import { SUPPORTED_LANGUAGES, TRANSLATIONS } from './i18n/translations';
 import {
   fetchDesktopConfig,
+  hideWindowToTray,
   isTauriDesktopRuntime,
   resetDesktopConfig,
   saveDesktopConfig,
 } from './services/tauriBridge';
-import { KeySpriteConfig, TargetOS } from './types/keysprite';
+import { KeySpriteConfig, LanguageCode, TargetOS } from './types/keysprite';
 import {
   DEFAULT_CONFIG_LINUX,
   DEFAULT_CONFIG_MACOS,
   DEFAULT_CONFIG_WINDOWS,
+  formatShortcutCompact,
   getDefaultConfigForOS,
   getDefaultShortcutsForOS,
 } from './utils/shortcutUtils';
@@ -25,7 +28,14 @@ function detectInitialConfig(): KeySpriteConfig {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<KeySpriteConfig>;
       const base = getDefaultConfigForOS(parsed.targetOS ?? 'macos');
-      return { ...base, ...parsed };
+      return {
+        ...base,
+        ...parsed,
+        language:
+          parsed.language && parsed.language in TRANSLATIONS
+            ? parsed.language
+            : 'zh-CN',
+      };
     }
   } catch {
     // Fallback to OS detection
@@ -40,9 +50,24 @@ function detectInitialConfig(): KeySpriteConfig {
 export default function App() {
   const isNativeDesktop = isTauriDesktopRuntime();
   const [config, setConfig] = useState<KeySpriteConfig>(detectInitialConfig);
-  const [statusMessage, setStatusMessage] = useState<string>(
-    '默认快捷键已启用 · 仅在文件管理器或桌面前台时触发'
-  );
+  const [statusKey, setStatusKey] = useState<
+    | 'statusReady'
+    | 'statusCopyUpdated'
+    | 'statusTerminalUpdated'
+    | 'statusAutostartEnabled'
+    | 'statusAutostartDisabled'
+    | 'statusResetDone'
+    | 'statusMinimized'
+  >('statusReady');
+  const [isMinimizedToTray, setIsMinimizedToTray] = useState(false);
+  const [trayMenuOpen, setTrayMenuOpen] = useState(true);
+  const [trayRunning, setTrayRunning] = useState(true);
+
+  const t = TRANSLATIONS[config.language] ?? TRANSLATIONS['zh-CN'];
+
+  useEffect(() => {
+    document.documentElement.lang = config.language;
+  }, [config.language]);
 
   useEffect(() => {
     if (!isNativeDesktop) return;
@@ -66,18 +91,21 @@ export default function App() {
   }, [config]);
 
   const updateConfig = useCallback(
-    (updater: (prev: KeySpriteConfig) => KeySpriteConfig, feedback?: string) => {
+    (
+      updater: (prev: KeySpriteConfig) => KeySpriteConfig,
+      nextStatus?: typeof statusKey
+    ) => {
       setConfig((prev) => {
         const next = updater(prev);
         if (isNativeDesktop) {
-          void saveDesktopConfig(next).catch((err) => {
-            setStatusMessage(`快捷键更新失败: ${String(err)}`);
+          void saveDesktopConfig(next).catch(() => {
+            // Keep UI responsive
           });
         }
         return next;
       });
-      if (feedback) {
-        setStatusMessage(feedback);
+      if (nextStatus) {
+        setStatusKey(nextStatus);
       }
     },
     [isNativeDesktop]
@@ -92,8 +120,31 @@ export default function App() {
         copyPathShortcut: nextDefaults.copyPathShortcut,
         openTerminalShortcut: nextDefaults.openTerminalShortcut,
       }),
-      `已切换至 ${nextOS === 'macos' ? 'macOS' : nextOS === 'windows' ? 'Windows' : 'Linux'} 默认快捷键`
+      'statusReady'
     );
+  };
+
+  const handleLanguageChange = (nextLang: LanguageCode) => {
+    updateConfig((prev) => ({ ...prev, language: nextLang }));
+  };
+
+  const handleToggleAutostart = () => {
+    const nextAutostart = !config.autostart;
+    updateConfig(
+      (prev) => ({ ...prev, autostart: nextAutostart }),
+      nextAutostart ? 'statusAutostartEnabled' : 'statusAutostartDisabled'
+    );
+  };
+
+  const handleMinimizeToTray = () => {
+    if (isNativeDesktop) {
+      void hideWindowToTray();
+      return;
+    }
+    setIsMinimizedToTray(true);
+    setTrayMenuOpen(true);
+    setTrayRunning(true);
+    setStatusKey('statusMinimized');
   };
 
   const handleResetDefaults = () => {
@@ -101,16 +152,20 @@ export default function App() {
       void resetDesktopConfig(config.targetOS)
         .then((resetCfg) => {
           if (resetCfg) setConfig(resetCfg);
-          setStatusMessage('已恢复默认快捷键');
+          setStatusKey('statusResetDone');
         })
-        .catch((err) => {
-          setStatusMessage(`恢复默认失败: ${String(err)}`);
+        .catch(() => {
+          // Keep current state
         });
       return;
     }
 
-    setConfig((prev) => getDefaultConfigForOS(prev.targetOS));
-    setStatusMessage('已恢复默认快捷键');
+    setConfig((prev) => ({
+      ...getDefaultConfigForOS(prev.targetOS),
+      language: prev.language,
+      autostart: prev.autostart,
+    }));
+    setStatusKey('statusResetDone');
   };
 
   const defaults = getDefaultShortcutsForOS(config.targetOS);
@@ -118,87 +173,287 @@ export default function App() {
     config.copyPathShortcut !== defaults.copyPathShortcut ||
     config.openTerminalShortcut !== defaults.openTerminalShortcut;
 
+  const copyCompact = formatShortcutCompact(config.copyPathShortcut, config.targetOS);
+  const termCompact = formatShortcutCompact(config.openTerminalShortcut, config.targetOS);
+
+  // Minimized to System Tray view (browser preview of tray resident state)
+  if (isMinimizedToTray) {
+    const isDarkTray = config.targetOS === 'windows' || config.targetOS === 'linux';
+    const trayTitle =
+      config.targetOS === 'macos'
+        ? t.trayBarTitleMac
+        : config.targetOS === 'windows'
+        ? t.trayBarTitleWin
+        : t.trayBarTitleLinux;
+
+    return (
+      <main className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex items-center justify-center p-6">
+        <div className="w-full max-w-[440px] space-y-4">
+          <div
+            className={`rounded-xl px-4 py-2.5 flex items-center justify-between text-xs border ${
+              isDarkTray
+                ? 'bg-[#1E293B] text-slate-100 border-slate-700'
+                : 'bg-white text-[#0F172A] border-slate-200'
+            }`}
+          >
+            <span className="font-medium opacity-80">{trayTitle}</span>
+            <div className="flex items-center gap-3">
+              {trayRunning ? (
+                <button
+                  type="button"
+                  onClick={() => setTrayMenuOpen((prev) => !prev)}
+                  className={`px-2.5 py-1 rounded-md flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    trayMenuOpen
+                      ? isDarkTray
+                        ? 'bg-white/15'
+                        : 'bg-slate-100'
+                      : 'hover:bg-slate-500/10'
+                  }`}
+                >
+                  <KeySpriteTraySvg size={15} />
+                  <span className="font-medium">KeySprite</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTrayRunning(true);
+                    setTrayMenuOpen(true);
+                  }}
+                  className="px-2.5 py-1 rounded-md bg-[#00845A] text-white text-xs font-medium cursor-pointer"
+                >
+                  {t.trayResumeButton}
+                </button>
+              )}
+              <span className="font-mono opacity-75">19:46</span>
+            </div>
+          </div>
+
+          {trayRunning && trayMenuOpen ? (
+            <div className="bg-white border border-slate-200 rounded-xl py-1.5 shadow-sm text-xs select-none">
+              <div className="px-4 py-2 text-slate-400 flex items-center justify-between">
+                <span>{t.trayCopyItem}</span>
+                <span className="font-mono">{copyCompact}</span>
+              </div>
+              <div className="px-4 py-2 text-slate-400 flex items-center justify-between">
+                <span>{t.trayTerminalItem}</span>
+                <span className="font-mono">{termCompact}</span>
+              </div>
+
+              <div className="my-1 border-t border-slate-100" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMinimizedToTray(false);
+                  setStatusKey('statusReady');
+                }}
+                className="w-full px-4 py-2 text-left font-medium text-[#0F172A] hover:bg-[#12273D] hover:text-white transition-colors cursor-pointer"
+              >
+                {t.traySettingsItem}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleAutostart}
+                className="w-full px-4 py-2 text-left text-[#0F172A] hover:bg-[#12273D] hover:text-white transition-colors flex items-center justify-between cursor-pointer"
+              >
+                <span>{t.trayAutostartItem}</span>
+                <span className="w-4 flex justify-end">
+                  {config.autostart && <Check className="w-3.5 h-3.5 text-[#00845A]" />}
+                </span>
+              </button>
+
+              <div className="my-1 border-t border-slate-100" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTrayRunning(false);
+                  setTrayMenuOpen(false);
+                }}
+                className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 transition-colors flex items-center justify-between cursor-pointer"
+              >
+                <span>{t.trayQuitItem}</span>
+                <Power className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : !trayRunning ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-5 text-center space-y-3">
+              <p className="text-xs text-slate-600">{t.trayPausedTitle}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setTrayRunning(true);
+                  setTrayMenuOpen(true);
+                  setIsMinimizedToTray(false);
+                }}
+                className="px-4 py-2 rounded-lg bg-[#12273D] text-white text-xs font-medium cursor-pointer"
+              >
+                {t.trayResumeButton}
+              </button>
+            </div>
+          ) : null}
+
+          <p className="text-center text-xs text-slate-500 px-2">{t.trayHint}</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex items-center justify-center p-6">
-      <div className="w-full max-w-[560px] bg-white border border-slate-200 rounded-2xl overflow-hidden">
+      <div className="w-full max-w-[600px] bg-white border border-slate-200 rounded-2xl overflow-hidden">
         {/* Header */}
-        <header className="px-6 py-4 border-b border-slate-200 flex items-center justify-between gap-4">
+        <header className="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <KeySpriteAppIcon size={36} />
             <div className="min-w-0">
               <h1 className="text-base font-bold tracking-tight text-[#12273D] truncate">
-                KeySprite <span className="text-[#00845A]">快捷键精灵</span>
+                {t.appName}
               </h1>
-              <p className="text-xs text-slate-500 truncate">
-                全局快捷键设置 · 默认已开启
-              </p>
+              <p className="text-xs text-slate-500 truncate">{t.appSubtitle}</p>
             </div>
           </div>
 
-          {!isNativeDesktop && (
-            <div
-              className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg shrink-0"
-              role="tablist"
-              aria-label="系统平台"
+          <div className="flex items-center gap-2 shrink-0">
+            {/* 10-Language Selector (Default: 简体中文) */}
+            <label className="relative flex items-center">
+              <Globe
+                className="w-3.5 h-3.5 text-slate-400 pointer-events-none absolute left-2.5"
+                aria-hidden="true"
+              />
+              <select
+                aria-label={t.languageLabel}
+                value={config.language}
+                onChange={(e) => handleLanguageChange(e.target.value as LanguageCode)}
+                className="h-8 pl-7 pr-6 rounded-lg border border-slate-200 bg-slate-50 hover:border-slate-300 text-xs font-medium text-[#0F172A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00845A] cursor-pointer"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.nativeName}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {!isNativeDesktop && (
+              <div
+                className="flex items-center gap-0.5 p-0.5 bg-slate-100 rounded-lg shrink-0"
+                role="tablist"
+                aria-label="OS"
+              >
+                {(['macos', 'windows', 'linux'] as TargetOS[]).map((os) => (
+                  <button
+                    key={os}
+                    type="button"
+                    role="tab"
+                    aria-selected={config.targetOS === os}
+                    onClick={() => handlePlatformChange(os)}
+                    className={`px-2 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                      config.targetOS === os
+                        ? 'bg-white text-[#12273D] shadow-xs'
+                        : 'text-slate-600 hover:text-[#0F172A]'
+                    }`}
+                  >
+                    {os === 'macos' ? 'macOS' : os === 'windows' ? 'Win' : 'Linux'}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Minimize to System Tray Button */}
+            <button
+              type="button"
+              onClick={handleMinimizeToTray}
+              className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              title={t.minimizeToTray}
             >
-              {(['macos', 'windows', 'linux'] as TargetOS[]).map((os) => (
-                <button
-                  key={os}
-                  type="button"
-                  role="tab"
-                  aria-selected={config.targetOS === os}
-                  onClick={() => handlePlatformChange(os)}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                    config.targetOS === os
-                      ? 'bg-white text-[#12273D] shadow-xs'
-                      : 'text-slate-600 hover:text-[#0F172A]'
-                  }`}
-                >
-                  {os === 'macos' ? 'macOS' : os === 'windows' ? 'Windows' : 'Linux'}
-                </button>
-              ))}
-            </div>
-          )}
+              <Minimize2 className="w-3.5 h-3.5 text-[#12273D]" />
+              <span>{t.minimizeToTray}</span>
+            </button>
+          </div>
         </header>
 
-        {/* Two Shortcut Settings Only */}
+        {/* Core Body: Two Shortcut Settings + System Launch at Startup */}
         <div className="px-6 py-4 divide-y divide-slate-100">
           <ShortcutRecorder
             id="copy-path-shortcut"
-            label="复制文件/文件夹路径"
-            description="选中项绝对路径（多选用换行分隔）；未选中时复制当前目录。"
+            label={t.copyPathLabel}
+            description={t.copyPathDesc}
             value={config.copyPathShortcut}
             defaultValue={defaults.copyPathShortcut}
             conflictWith={config.openTerminalShortcut}
             targetOS={config.targetOS}
+            pressKeysPrompt={t.pressKeysPrompt}
+            clickToRecord={t.clickToRecord}
+            escLabel={t.escLabel}
+            resetSingleTooltip={t.resetSingleTooltip}
+            needModifierError={t.needModifierError}
+            conflictError={t.conflictError}
             onChange={(next) =>
               updateConfig(
                 (prev) => ({ ...prev, copyPathShortcut: next }),
-                '已更新「复制路径」快捷键并保存'
+                'statusCopyUpdated'
               )
             }
           />
 
           <ShortcutRecorder
             id="open-terminal-shortcut"
-            label="打开命令行并定位到目录"
-            description="打开终端并自动切换至选中文件夹或文件所在目录。"
+            label={t.openTerminalLabel}
+            description={t.openTerminalDesc}
             value={config.openTerminalShortcut}
             defaultValue={defaults.openTerminalShortcut}
             conflictWith={config.copyPathShortcut}
             targetOS={config.targetOS}
+            pressKeysPrompt={t.pressKeysPrompt}
+            clickToRecord={t.clickToRecord}
+            escLabel={t.escLabel}
+            resetSingleTooltip={t.resetSingleTooltip}
+            needModifierError={t.needModifierError}
+            conflictError={t.conflictError}
             onChange={(next) =>
               updateConfig(
                 (prev) => ({ ...prev, openTerminalShortcut: next }),
-                '已更新「打开命令行」快捷键并保存'
+                'statusTerminalUpdated'
               )
             }
           />
+
+          {/* Launch at Startup */}
+          <div className="py-4 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-[#0F172A]">
+                {t.autostartLabel}
+              </div>
+              <p className="mt-0.5 text-xs text-slate-500 leading-relaxed">
+                {t.autostartDesc}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={config.autostart}
+              aria-label={t.autostartLabel}
+              onClick={handleToggleAutostart}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00845A] ${
+                config.autostart ? 'bg-[#00845A]' : 'bg-slate-200'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-xs transition-transform ${
+                  config.autostart ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         {/* Footer */}
         <footer className="px-6 py-3.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between gap-4">
-          <span className="text-xs text-slate-500 truncate">{statusMessage}</span>
+          <span className="text-xs text-slate-500 truncate">{t[statusKey]}</span>
           <button
             type="button"
             onClick={handleResetDefaults}
@@ -210,7 +465,7 @@ export default function App() {
             }`}
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>恢复默认</span>
+            <span>{t.resetDefaults}</span>
           </button>
         </footer>
       </div>

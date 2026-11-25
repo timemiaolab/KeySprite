@@ -14,6 +14,12 @@ interface ShortcutRecorderProps {
   defaultValue: string;
   conflictWith?: string;
   targetOS: TargetOS;
+  pressKeysPrompt?: string;
+  clickToRecord?: string;
+  escLabel?: string;
+  resetSingleTooltip?: string;
+  needModifierError?: string;
+  conflictError?: string;
   onChange: (nextShortcut: string) => void;
 }
 
@@ -25,6 +31,12 @@ export function ShortcutRecorder({
   defaultValue,
   conflictWith,
   targetOS,
+  pressKeysPrompt = '请按下新组合键…',
+  clickToRecord = '点击修改',
+  escLabel = 'Esc',
+  resetSingleTooltip = '恢复默认快捷键',
+  needModifierError = '至少需要包含一个修饰键（Cmd / Ctrl / Alt / Shift）',
+  conflictError = '该快捷键已被另一项功能占用，请更换组合键',
   onChange,
 }: ShortcutRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
@@ -44,7 +56,7 @@ export function ShortcutRecorder({
         return;
       }
 
-      const { shortcut, error } = buildShortcutFromKeyboardEvent(event);
+      const { shortcut, error } = buildShortcutFromKeyboardEvent(event, needModifierError);
       if (error) {
         setErrorMsg(error);
         return;
@@ -54,7 +66,7 @@ export function ShortcutRecorder({
       }
 
       if (conflictWith && shortcut === conflictWith) {
-        setErrorMsg('该快捷键已被另一项功能占用，请更换组合键');
+        setErrorMsg(conflictError);
         return;
       }
 
@@ -73,13 +85,13 @@ export function ShortcutRecorder({
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [isRecording, conflictWith, onChange]);
+  }, [isRecording, conflictWith, needModifierError, conflictError, onChange]);
 
   const tokens = formatShortcutTokens(value, targetOS);
   const isModified = value !== defaultValue;
 
   return (
-    <div className="py-4 first:pt-0 last:pb-0">
+    <div className="py-4 first:pt-2">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="min-w-0">
           <label htmlFor={id} className="block text-sm font-semibold text-[#0F172A]">
@@ -97,7 +109,7 @@ export function ShortcutRecorder({
               setErrorMsg(null);
               setIsRecording((prev) => !prev);
             }}
-            className={`min-w-[176px] h-10 px-3 rounded-lg border text-xs font-medium flex items-center justify-between gap-3 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00845A] ${
+            className={`min-w-[184px] h-10 px-3 rounded-lg border text-xs font-medium flex items-center justify-between gap-3 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00845A] ${
               isRecording
                 ? 'border-[#00845A] bg-[#00845A]/5 text-[#00845A]'
                 : 'border-slate-200 bg-slate-50 hover:border-slate-300 text-slate-700'
@@ -106,7 +118,7 @@ export function ShortcutRecorder({
             {isRecording ? (
               <span className="flex items-center gap-2 font-medium">
                 <Keyboard className="w-3.5 h-3.5 shrink-0" />
-                <span>请按下新组合键…</span>
+                <span>{pressKeysPrompt}</span>
               </span>
             ) : (
               <span className="flex items-center gap-1">
@@ -121,7 +133,7 @@ export function ShortcutRecorder({
               </span>
             )}
             <span className="text-[11px] text-slate-400">
-              {isRecording ? 'Esc' : '点击录制'}
+              {isRecording ? escLabel : clickToRecord}
             </span>
           </button>
 
@@ -133,8 +145,8 @@ export function ShortcutRecorder({
                 setIsRecording(false);
                 onChange(defaultValue);
               }}
-              title="恢复该项默认快捷键"
-              aria-label={`恢复${label}默认快捷键`}
+              title={resetSingleTooltip}
+              aria-label={`${resetSingleTooltip} ${label}`}
               className="h-10 w-10 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 hover:text-[#12273D] flex items-center justify-center transition-colors shrink-0 cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />

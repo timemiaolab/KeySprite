@@ -1,6 +1,7 @@
 import { KeySpriteConfig, TargetOS } from '../types/keysprite';
 
 export const DEFAULT_CONFIG_MACOS: KeySpriteConfig = {
+  language: 'zh-CN',
   targetOS: 'macos',
   copyPathShortcut: 'Super+9',
   openTerminalShortcut: 'Super+0',
@@ -13,6 +14,7 @@ export const DEFAULT_CONFIG_MACOS: KeySpriteConfig = {
 };
 
 export const DEFAULT_CONFIG_WINDOWS: KeySpriteConfig = {
+  language: 'zh-CN',
   targetOS: 'windows',
   copyPathShortcut: 'Alt+9',
   openTerminalShortcut: 'Alt+0',
@@ -25,6 +27,7 @@ export const DEFAULT_CONFIG_WINDOWS: KeySpriteConfig = {
 };
 
 export const DEFAULT_CONFIG_LINUX: KeySpriteConfig = {
+  language: 'zh-CN',
   targetOS: 'linux',
   copyPathShortcut: 'Alt+9',
   openTerminalShortcut: 'Alt+0',
@@ -112,7 +115,10 @@ export function normalizeKeyToken(event: KeyboardEvent): string | null {
   return null;
 }
 
-export function buildShortcutFromKeyboardEvent(event: KeyboardEvent): {
+export function buildShortcutFromKeyboardEvent(
+  event: KeyboardEvent,
+  needModifierError = '至少需要包含一个修饰键（Cmd / Ctrl / Alt / Shift）'
+): {
   shortcut: string | null;
   error: string | null;
 } {
@@ -130,7 +136,7 @@ export function buildShortcutFromKeyboardEvent(event: KeyboardEvent): {
   if (mods.length === 0) {
     return {
       shortcut: null,
-      error: '全局快捷键至少需要包含一个修饰键（Cmd / Ctrl / Alt / Shift）',
+      error: needModifierError,
     };
   }
 

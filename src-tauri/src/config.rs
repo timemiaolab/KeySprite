@@ -41,6 +41,8 @@ pub enum PassthroughStrategy {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
+    #[serde(default = "default_language")]
+    pub language: String,
     pub copy_path_shortcut: String,
     pub open_terminal_shortcut: String,
     pub mac_terminal: MacTerminal,
@@ -52,15 +54,16 @@ pub struct AppConfig {
     pub passthrough_strategy: PassthroughStrategy,
 }
 
+fn default_language() -> String {
+    "zh-CN".to_string()
+}
+
 fn default_linux_terminal() -> LinuxTerminal {
     LinuxTerminal::Auto
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
-        // 首次打开客户端时，各平台两个核心快捷键默认即配置就绪：
-        // macOS: Command + 9 / Command + 0
-        // Windows & Linux: Alt + 9 / Alt + 0
         #[cfg(target_os = "macos")]
         let (copy_shortcut, terminal_shortcut) = (
             "Super+9".to_string(),
@@ -74,6 +77,7 @@ impl Default for AppConfig {
         );
 
         Self {
+            language: default_language(),
             copy_path_shortcut: copy_shortcut,
             open_terminal_shortcut: terminal_shortcut,
             mac_terminal: MacTerminal::Terminal,

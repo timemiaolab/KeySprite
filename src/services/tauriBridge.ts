@@ -1,4 +1,4 @@
-import { KeySpriteConfig, TargetOS } from '../types/keysprite';
+import { KeySpriteConfig, LanguageCode, TargetOS } from '../types/keysprite';
 
 interface TauriInternals {
   invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
@@ -22,6 +22,7 @@ async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
 }
 
 export interface RustAppConfigPayload {
+  language: LanguageCode;
   copyPathShortcut: string;
   openTerminalShortcut: string;
   macTerminal: 'terminal' | 'iterm2' | 'warp';
@@ -41,12 +42,14 @@ export async function fetchDesktopConfig(): Promise<KeySpriteConfig | null> {
   return {
     targetOS: os,
     ...rustCfg,
+    language: rustCfg.language || 'zh-CN',
   };
 }
 
 export async function saveDesktopConfig(config: KeySpriteConfig): Promise<KeySpriteConfig | null> {
   if (!isTauriDesktopRuntime()) return null;
   const payload: RustAppConfigPayload = {
+    language: config.language,
     copyPathShortcut: config.copyPathShortcut,
     openTerminalShortcut: config.openTerminalShortcut,
     macTerminal: config.macTerminal,
@@ -72,6 +75,11 @@ export async function resetDesktopConfig(targetOS: TargetOS): Promise<KeySpriteC
     targetOS,
     ...saved,
   };
+}
+
+export async function hideWindowToTray(): Promise<void> {
+  if (!isTauriDesktopRuntime()) return;
+  await tauriInvoke<void>('hide_to_tray');
 }
 
 export async function checkMacAccessibility(): Promise<boolean> {
