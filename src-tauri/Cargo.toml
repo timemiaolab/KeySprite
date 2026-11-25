@@ -1,6 +1,6 @@
 [package]
 name = "keysprite"
-version = "0.1.0"
+version = "0.1.1"
 description = "KeySprite 快捷键精灵 — 轻量化跨平台系统托盘效率工具"
 authors = ["KeySprite"]
 edition = "2021"

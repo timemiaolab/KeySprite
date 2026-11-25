@@ -1,0 +1,252 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.1). Prefer pushing the tag; dispatch can republish the same tag after a successful rebuild."
+        required: true
+        type: string
+        default: "v0.1.1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event_name }}-${{ github.ref }}-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-arm64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            arch_label: aarch64
+            os_family: macos
+          - name: macos-x64
+            runner: macos-latest
+            target: x86_64-apple-darwin
+            arch_label: x64
+            os_family: macos
+          - name: windows-x64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            arch_label: x64
+            os_family: windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.90
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> src-tauri/target
+          shared-key: ${{ matrix.target }}
+
+      - name: Build Tauri bundles
+        run: npm run tauri:build -- --target ${{ matrix.target }}
+
+      - name: Stage release artifacts
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          ARCH_LABEL: ${{ matrix.arch_label }}
+          OS_FAMILY: ${{ matrix.os_family }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          BUNDLE="src-tauri/target/${TARGET}/release/bundle"
+          STAGE="release-artifacts"
+          mkdir -p "$STAGE"
+
+          if [ ! -d "$BUNDLE" ]; then
+            echo "Bundle directory not found: $BUNDLE" >&2
+            find src-tauri/target -maxdepth 5 -type d -print || true
+            exit 1
+          fi
+
+          stage_one() {
+            local pattern="$1"
+            local dest="$2"
+            local matches=()
+            while IFS= read -r -d '' f; do
+              matches+=("$f")
+            done < <(find "$BUNDLE" -type f -name "$pattern" -print0 2>/dev/null)
+
+            if [ "${#matches[@]}" -eq 0 ]; then
+              echo "No files matching $pattern under $BUNDLE" >&2
+              find "$BUNDLE" -type f -print || true
+              exit 1
+            fi
+            if [ "${#matches[@]}" -gt 1 ]; then
+              echo "Multiple files matching $pattern; using the first after listing:" >&2
+              printf '  %s\n' "${matches[@]}" >&2
+            fi
+            cp "${matches[0]}" "$STAGE/$dest"
+            echo "Staged $dest from ${matches[0]}"
+          }
+
+          if [ "$OS_FAMILY" = "macos" ]; then
+            stage_one "*.dmg" "KeySprite_${VERSION}_${ARCH_LABEL}.dmg"
+            app_dir=""
+            while IFS= read -r -d '' d; do
+              app_dir="$d"
+              break
+            done < <(find "$BUNDLE" -type d -name "*.app" -print0 2>/dev/null)
+            if [ -z "$app_dir" ]; then
+              echo "No .app bundle found under $BUNDLE" >&2
+              find "$BUNDLE" -print || true
+              exit 1
+            fi
+            tar -C "$(dirname "$app_dir")" -czf "$STAGE/KeySprite_${VERSION}_${ARCH_LABEL}.app.tar.gz" "$(basename "$app_dir")"
+            echo "Staged KeySprite_${VERSION}_${ARCH_LABEL}.app.tar.gz from $app_dir"
+          else
+            stage_one "*.msi" "KeySprite_${VERSION}_${ARCH_LABEL}.msi"
+            stage_one "*.exe" "KeySprite_${VERSION}_${ARCH_LABEL}-setup.exe"
+          fi
+
+          echo "Staged artifacts:"
+          ls -la "$STAGE"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: KeySprite-${{ matrix.name }}
+          path: release-artifacts/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: publish-github-release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve tag
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Refusing to publish non-semver tag: $TAG" >&2
+            exit 1
+          fi
+          {
+            echo "tag=$TAG"
+            echo "name=KeySprite ${TAG#v}"
+            echo "version=${TAG#v}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: collected
+          pattern: KeySprite-*
+          merge-multiple: true
+
+      - name: Verify required artifacts
+        shell: bash
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd collected
+          ls -la
+          required=(
+            "KeySprite_${VERSION}_aarch64.dmg"
+            "KeySprite_${VERSION}_aarch64.app.tar.gz"
+            "KeySprite_${VERSION}_x64.dmg"
+            "KeySprite_${VERSION}_x64.app.tar.gz"
+            "KeySprite_${VERSION}_x64.msi"
+            "KeySprite_${VERSION}_x64-setup.exe"
+          )
+          missing=0
+          for f in "${required[@]}"; do
+            if [ ! -s "$f" ]; then
+              echo "MISSING or empty: $f" >&2
+              missing=1
+            else
+              echo "OK $f ($(wc -c < "$f") bytes)"
+            fi
+          done
+          extra=0
+          for f in *; do
+            [ -f "$f" ] || continue
+            skip=0
+            for r in "${required[@]}"; do
+              if [ "$f" = "$r" ]; then
+                skip=1
+                break
+              fi
+            done
+            if [ "$skip" -eq 0 ]; then
+              echo "UNEXPECTED artifact (will not upload): $f" >&2
+              extra=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Refusing to publish an incomplete release." >&2
+            exit 1
+          fi
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          files: |
+            collected/KeySprite_${{ steps.meta.outputs.version }}_aarch64.dmg
+            collected/KeySprite_${{ steps.meta.outputs.version }}_aarch64.app.tar.gz
+            collected/KeySprite_${{ steps.meta.outputs.version }}_x64.dmg
+            collected/KeySprite_${{ steps.meta.outputs.version }}_x64.app.tar.gz
+            collected/KeySprite_${{ steps.meta.outputs.version }}_x64.msi
+            collected/KeySprite_${{ steps.meta.outputs.version }}_x64-setup.exe
+          body: |
+            KeySprite ${{ steps.meta.outputs.version }}
+
+            Packaged installers (unsigned):
+            - macOS Apple Silicon (ARM): `KeySprite_${{ steps.meta.outputs.version }}_aarch64.dmg` and `KeySprite_${{ steps.meta.outputs.version }}_aarch64.app.tar.gz`
+            - macOS Intel (x86_64): `KeySprite_${{ steps.meta.outputs.version }}_x64.dmg` and `KeySprite_${{ steps.meta.outputs.version }}_x64.app.tar.gz`
+            - Windows x64: `KeySprite_${{ steps.meta.outputs.version }}_x64-setup.exe` and `KeySprite_${{ steps.meta.outputs.version }}_x64.msi`
+
+            These builds are not code-signed or notarized. macOS Gatekeeper and Windows SmartScreen may warn on first launch.
+
+            This release is published only after the macOS ARM, macOS Intel, and Windows x64 jobs all succeed and the six required artifacts are present.
