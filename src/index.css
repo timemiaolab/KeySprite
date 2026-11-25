@@ -36,3 +36,13 @@
   app-region: no-drag;
   -webkit-app-region: no-drag;
 }
+
+
+/* Kill the native select chevron so a single SVG arrow can be positioned
+   in reserved padding (pr-8) without overlapping the label. */
+.keysprite-language-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: none;
+}

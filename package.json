@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "test": "tsx --test src/utils/preferencesStatus.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

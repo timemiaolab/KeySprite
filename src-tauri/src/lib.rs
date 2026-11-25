@@ -10,7 +10,9 @@ use crate::config::{load_config, save_config, AppConfig};
 use crate::platform::{
     check_accessibility_permission, current_os_id, open_accessibility_settings,
 };
-use crate::shortcuts::register_shortcuts;
+use crate::shortcuts::{
+    current_registration_status, register_shortcuts, RegistrationCache, ShortcutRegistrationStatus,
+};
 use crate::tray::{build_tray, refresh_tray_menu};
 
 #[tauri::command]
@@ -25,7 +27,7 @@ fn get_config(app: AppHandle) -> AppConfig {
 
 #[tauri::command]
 fn save_and_reload_config(app: AppHandle, new_config: AppConfig) -> Result<AppConfig, String> {
-    register_shortcuts(&app, &new_config)?;
+    register_shortcuts(&app, &new_config).map_err(|err| err.to_ipc_string())?;
     save_config(&app, &new_config)?;
     let _ = refresh_tray_menu(&app, &new_config);
 
@@ -61,6 +63,12 @@ fn check_permissions() -> bool {
 }
 
 #[tauri::command]
+fn get_shortcut_registration(app: AppHandle) -> ShortcutRegistrationStatus {
+    let config = load_config(&app);
+    current_registration_status(&app, &config)
+}
+
+#[tauri::command]
 fn request_accessibility_settings() -> Result<(), String> {
     open_accessibility_settings().map_err(|e| e.to_string())
 }
@@ -82,9 +90,15 @@ pub fn run() {
 
             let handle = app.handle();
             let config = load_config(handle);
+            handle.manage(RegistrationCache(std::sync::Mutex::new(
+                ShortcutRegistrationStatus::from_config(&config),
+            )));
 
             build_tray(handle, &config)?;
-            register_shortcuts(handle, &config)?;
+            // Record real registration results in the UI instead of aborting startup.
+            if let Err(err) = register_shortcuts(handle, &config) {
+                eprintln!("KeySprite shortcut registration failed: {}", err.to_ipc_string());
+            }
 
             // 手动打开时显示设置窗；开机自启 (--minimized) 时直接静默驻留托盘
             let is_minimized = std::env::args().any(|arg| arg == "--minimized");
@@ -113,7 +127,8 @@ pub fn run() {
             reset_default_config,
             hide_to_tray,
             check_permissions,
-            request_accessibility_settings
+            request_accessibility_settings,
+            get_shortcut_registration
         ])
         .run(tauri::generate_context!())
         .expect("KeySprite 启动失败");

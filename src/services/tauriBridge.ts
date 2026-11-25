@@ -1,4 +1,9 @@
 import { KeySpriteConfig, LanguageCode, TargetOS } from '../types/keysprite';
+import {
+  ShortcutErrorPayload,
+  ShortcutRegistrationStatus,
+  parseShortcutError,
+} from '../utils/preferencesStatus';
 
 interface TauriInternals {
   invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
@@ -33,21 +38,30 @@ export interface RustAppConfigPayload {
   passthroughStrategy: 'ignore_non_file_manager' | 'simulate_key_passthrough';
 }
 
+function toDesktopConfig(
+  rustCfg: RustAppConfigPayload,
+  targetOS: TargetOS
+): KeySpriteConfig {
+  return {
+    targetOS,
+    ...rustCfg,
+    language: rustCfg.language || 'zh-CN',
+  };
+}
+
 export async function fetchDesktopConfig(): Promise<KeySpriteConfig | null> {
   if (!isTauriDesktopRuntime()) return null;
   const [os, rustCfg] = await Promise.all([
     tauriInvoke<TargetOS>('get_platform_os'),
     tauriInvoke<RustAppConfigPayload>('get_config'),
   ]);
-  return {
-    targetOS: os,
-    ...rustCfg,
-    language: rustCfg.language || 'zh-CN',
-  };
+  return toDesktopConfig(rustCfg, os);
 }
 
-export async function saveDesktopConfig(config: KeySpriteConfig): Promise<KeySpriteConfig | null> {
-  if (!isTauriDesktopRuntime()) return null;
+export async function saveDesktopConfig(config: KeySpriteConfig): Promise<KeySpriteConfig> {
+  if (!isTauriDesktopRuntime()) {
+    throw new Error('Not running inside Tauri runtime');
+  }
   const payload: RustAppConfigPayload = {
     language: config.language,
     copyPathShortcut: config.copyPathShortcut,
@@ -59,22 +73,39 @@ export async function saveDesktopConfig(config: KeySpriteConfig): Promise<KeySpr
     showNotifications: config.showNotifications,
     passthroughStrategy: config.passthroughStrategy,
   };
-  const saved = await tauriInvoke<RustAppConfigPayload>('save_and_reload_config', {
-    newConfig: payload,
-  });
-  return {
-    targetOS: config.targetOS,
-    ...saved,
-  };
+  try {
+    const saved = await tauriInvoke<RustAppConfigPayload>('save_and_reload_config', {
+      newConfig: payload,
+    });
+    return toDesktopConfig(saved, config.targetOS);
+  } catch (error) {
+    const parsed = parseShortcutError(error);
+    const wrapped = new Error(parsed?.message || 'save_and_reload_config failed') as Error & {
+      shortcutError?: ShortcutErrorPayload | null;
+    };
+    wrapped.shortcutError = parsed;
+    throw wrapped;
+  }
 }
 
 export async function resetDesktopConfig(targetOS: TargetOS): Promise<KeySpriteConfig | null> {
   if (!isTauriDesktopRuntime()) return null;
-  const saved = await tauriInvoke<RustAppConfigPayload>('reset_default_config');
-  return {
-    targetOS,
-    ...saved,
-  };
+  try {
+    const saved = await tauriInvoke<RustAppConfigPayload>('reset_default_config');
+    return toDesktopConfig(saved, targetOS);
+  } catch (error) {
+    const parsed = parseShortcutError(error);
+    const wrapped = new Error(parsed?.message || 'reset_default_config failed') as Error & {
+      shortcutError?: ShortcutErrorPayload | null;
+    };
+    wrapped.shortcutError = parsed;
+    throw wrapped;
+  }
+}
+
+export async function fetchShortcutRegistration(): Promise<ShortcutRegistrationStatus | null> {
+  if (!isTauriDesktopRuntime()) return null;
+  return tauriInvoke<ShortcutRegistrationStatus>('get_shortcut_registration');
 }
 
 export async function hideWindowToTray(): Promise<void> {
